@@ -125,9 +125,15 @@ Output:
 ### How you found the root cause 
 <!--— Which files did you look at? What was your navigation path? What moment made you confident you'd found the right place — not just a suspicious area, but the specific cause?
 -->
+GET /<playlist_id>/songs
+
+Route Layer /routes/playlists.py: get_songs(playlist_id) => route wired method
+
+Service Layer /services/playlist_service.py: get_playlist_songs(playlist_id) => returns all songs in the playlist
+
 I went to the routes folder, playlists.py caught my eye. In the route file, I followed the get_songs(playlist_id). This wired function calls get_playlist_songs(playlist_id) in the service folder to playlist_service.py. In the service function, I saw whats returned is a list of dicts in representing the songs, but for loop stops iterating at the last element (excluding it). I knew that was the error.
 
-I recognized out the count returned is 6, but the actual number of songs in the playlist is 7.
+I recognized out the count returned is 6, but the actual number of songs in the playlist are 7.
 
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
@@ -142,7 +148,7 @@ Fix:
 ```
 return [song.to_dict() for song in songs]
 ```
-I changed the for loop to where all elements are iterated through, it fixes the root cause because every song dict will be returned, all songs will be displayed for a playlist. I tested my fix by using the pytests provided.
+I changed the for loop to where all elements are iterated through, it fixes the root cause because every song dict will be returned, all songs will be displayed for a playlist. I tested fornthe side-effect check by using the pytests provided.
 
 CLI Command
 ```
@@ -157,22 +163,83 @@ tests/test_playlists.py ...                      [100%]
 ==================3 passed in 0.89s ===================================================
 ```
 
-### Issue number and title
+### Issue number and title: Bug #3 The same song keeps showing up twice in search
 
 ### How you reproduced it 
 <!-- What steps did you take to confirm the bug exists before touching any code? What inputs, sequence of actions, or data condition triggered the behavior? 
 -->
+I choose a random song name from the song table in mixtape.db, saved the name. So I entered the command below where part of the "Harlem Renaissance" song name is the input. Got CLI errors when using spacing for a query parameter.
+
+CLI Command
+```
+curl 'http://localhost:5000/songs/search?q=Harlem'
+```
+
+Output:
+```
+{
+"count":3,
+"results": [
+    {"album":null,"artist":"Uptown Collective","genre":"hip-hop","id":"7f543c35-f871-4214-9d19-a220df1a8518","share_note":null,"shared_at":"2026-06-30T18:34:53.378402","shared_by":"efb43ec2-2656-4b8a-ad65-1609d5170319","tags":["rap","hip-hop","soul"],"title":"Harlem Renaissance"},
+    {"album":null,"artist":"Uptown Collective","genre":"hip-hop","id":"7f543c35-f871-4214-9d19-a220df1a8518","share_note":null,"shared_at":"2026-06-30T18:34:53.378402","shared_by":"efb43ec2-2656-4b8a-ad65-1609d5170319","tags":["rap","hip-hop","soul"],"title":"Harlem Renaissance"},
+    {"album":null,"artist":"Uptown Collective","genre":"hip-hop","id":"7f543c35-f871-4214-9d19-a220df1a8518","share_note":null,"shared_at":"2026-06-30T18:34:53.378402","shared_by":"efb43ec2-2656-4b8a-ad65-1609d5170319","tags":["rap","hip-hop","soul"],"title":"Harlem Renaissance"},
+    ]
+}
+```
+
 ### How you found the root cause 
 <!--— Which files did you look at? What was your navigation path? What moment made you confident you'd found the right place — not just a suspicious area, but the specific cause?
 -->
 
+GET /search?q=Harlem
+
+Route Layer /routes/songs.py: search() => route wired method
+
+Service Layer /services/streak_service.py: search_songs(query) => Search for songs by title or artist name
+
+The song named "Harlem Renaissance" has 3 tags (e.g., "rap", "hip-hop", "soul"), the database returns 3 rows for that same song. Therefore, we get three identical song database objects. The pattern is the number of duplicate song titles = the # of tags 
+
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
 -->
+The underlying SQL query creates a new row for every combination of a song and a tag, duplicates are created this way. 
+
 ### Your fix and side-effect check 
 <!--
 — What did you change and why does that change fix the root cause? What related functionality did you check afterward to confirm you didn't break anything? 
 -->
+Fix: 
+```
+results = (
+        db.session.query(Song)
+        .outerjoin(song_tags, Song.id == song_tags.c.song_id)
+        .filter(
+            db.or_(
+                Song.title.ilike(f"%{query}%"),
+                Song.artist.ilike(f"%{query}%"),
+            )
+        )
+        .distinct()
+        .all()
+)
+```
+
+I added the distinct() method after the filtering, SQLAlchemy tells the underlying database engine to remove duplicate rows from the final SQL query results before returning them to Python. This is the exact fix needed to overcome the duplication side-effect caused by the .outerjoin(). I tested fornthe side-effect check by using the pytests provided.
+
+CLI Command 
+
+```
+pytest tests/test_search.py
+```
+
+Output:
+
+```
+collected 5 items                                                                                              
+tests/test_search py .....                                                                                       [100%]
+
+======= 5 passed in 0.44s ===================================================
+```
 
 ### Issue number and title
 
