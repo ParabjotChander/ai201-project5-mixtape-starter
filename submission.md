@@ -295,7 +295,7 @@ I recognized out the count returned is 6, but the actual number of songs in the 
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
 -->
-Not all the songs are being iterated through, the last element is being excluded, this is a display bug.
+Not all the songs are being iterated through from the songs variable (query retrieval), the last element is being excluded. This is a python slicing operation failure and therefore, a display bug.
 
 ### Your fix and side-effect check 
 <!--
@@ -359,7 +359,7 @@ The song named "Harlem Renaissance" has 3 tags (e.g., "rap", "hip-hop", "soul"),
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
 -->
-The underlying SQL query creates a new row for every combination of a song and a tag, duplicates are created this way. 
+Because the underlying SQL query joins songs and tags without aggregating or filtering the many-to-many relationship, it inadvertently generates a new row for every unique song-tag combination. Consequently, any song with multiple tags creates duplicate song records in the output. To fix this logic bug and maintain data integrity, the query must be rewritten to decouple the tag matching from the primary song rows, ensuring each song is represented exactly once regardless of how many tags it carries.
 
 ### Your fix and side-effect check 
 <!--
@@ -435,7 +435,7 @@ I read the record_listening_event service method, update_listening_streak is cal
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
 -->
-The streak only increments if today is not Sunday. If today is Sunday, even if the user listened yesterday (Saturday), the steak doesn't increase by 1 but resets to 1.
+The listening streak variable only increments if only the streak is active & today is not Sunday. If today is Sunday, even if the user listened yesterday (Saturday), the streak variable doesn't increase by 1 but resets to 1. This is a logic bug.
 
 ### Your fix and side-effect check 
 <!--
