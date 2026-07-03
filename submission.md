@@ -1,5 +1,7 @@
 # Project 4 MixTape Bug Hunt
 
+## AI Usage
+
 ## CodeBase Map
 
 ### app.py
@@ -224,7 +226,7 @@ results = (
 )
 ```
 
-I added the distinct() method after the filtering, SQLAlchemy tells the underlying database engine to remove duplicate rows from the final SQL query results before returning them to Python. This is the exact fix needed to overcome the duplication side-effect caused by the .outerjoin(). I tested fornthe side-effect check by using the pytests provided.
+I added the distinct() method after the filtering, SQLAlchemy tells the underlying database engine to remove duplicate rows from the final SQL query results before returning them to Python. This is the exact fix needed to overcome the duplication side-effect caused by the .outerjoin(). I tested for the side-effect check by using the pytests provided.
 
 CLI Command 
 
@@ -241,22 +243,81 @@ tests/test_search py .....                                                      
 ======= 5 passed in 0.44s ===================================================
 ```
 
-### Issue number and title
+### Issue number and title: The listening streak keeps on resetting
 
 ### How you reproduced it 
 <!-- What steps did you take to confirm the bug exists before touching any code? What inputs, sequence of actions, or data condition triggered the behavior? 
 -->
+
+To reproduce the bug you had to create a situtation where a user has a listening streak active on saturday that is more than one day and the user has to listen to a song on Sunday. On Sunday, the listening streak, instaed of increasing by 1 (when user listens to a song on that day), resets back to 1. I the current data provided didn't have a situation like this and I couldn't add data since the POST /<song_id>/listetn route will use the current date, not a date you can customize. I created a debug python script where the user has a active listening streak and approaches Sunday, listening and the listening streak resets to 1. As input, I choose July 5, 2026 to simulate Sunday, created a User object from models.py, have the listening_streak to 5 on July 4, 2026 (Saturday).
+
+CLI Command
+```
+python3 debug_streak.py
+```
+
+Output
+```
+BEFORE Sunday (Saturday): Listening Streak: 7
+Simulating Sunday with last listened on Saturday
+Listening During Sunday, Listening Streak: 1
+```
+
 ### How you found the root cause 
 <!--— Which files did you look at? What was your navigation path? What moment made you confident you'd found the right place — not just a suspicious area, but the specific cause?
 -->
 
+POST /<song_id>/listetn route
+
+Route Layer /routes/songs.py: def listen(song_id) => wired function for that route  
+
+Service Layer /services/streak_service.py: record_listening_event(user_id, song_id) => update_listening_streak(user, now)
+
+Model Layer: A new Listening Event instance is created, and stored in the DB 
+
+I read the record_listening_event service method, update_listening_streak is called inside it. I moved on to the function and found this condition today.weekday() != 6. I used a AI tool to find what .weekday() method returns and what a return value of 6 means. I learned the method returns the day of the week as a integer, Monday = 0, and Sunday = 6. So I figured out that the streak doesn't increment on Sunday, the condition to increment the listening streak becomes false and the code falls to the else block, resetting the streak to 1.
+
 ### The root cause 
 <!-- — In plain English, explain exactly what was wrong. Not "there was a bug in the streak logic" — explain the specific condition, comparison, or missing step that caused the problem.
 -->
+The streak only increments if today is not Sunday. If today is Sunday, even if the user listened yesterday (Saturday), the steak doesn't increase by 1 but resets to 1.
+
 ### Your fix and side-effect check 
 <!--
 — What did you change and why does that change fix the root cause? What related functionality did you check afterward to confirm you didn't break anything? 
 -->
+Fix:
 
-## AI Usage
+```
+    if days_since_last == 0:
+        # Already updated today — no change needed
+        return
+    elif days_since_last == 1:
+        user.listening_streak += 1
+    else:
+        user.listening_streak = 1
+```
+
+I just removed the condition in the else if clause that checks whether the date is not equal to Sunday. This fixes the root cause now because when a user is listening to a song on Sunday with a active listening streak, else if clause will be ran, incrementing the streak, not resetting it. The else won't be ran. I tested for the side-effect check by using the pytests provided.
+
+CLI Command 
+
+```
+pytest tests/test_streaks.py
+```
+
+Output:
+
+```
+collected 5 items                                                                                                       
+
+tests/test_streaks.py .....                                                                                       [100%]
+
+=================================================== 5 passed in 0.42s ===================================================
+```
+
+
+
+
+
 

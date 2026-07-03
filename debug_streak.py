@@ -8,12 +8,12 @@ app = create_app()
 with app.app_context():
     user = User.query.first()
 
+    last_listened= datetime(2026, 7, 4, tzinfo=timezone.utc)
     # snapshot original values (DO NOT MODIFY DB)
-    original_streak = user.listening_streak
-    original_last = user.last_listened_at
+    original_streak = 5
+    original_last = last_listened
 
     print("BEFORE Sunday (Saturday): Listening Streak:", user.listening_streak)
-
     # simulate Sunday
     now = datetime(2026, 7, 5, tzinfo=timezone.utc)
 
@@ -22,8 +22,8 @@ with app.app_context():
         id=user.id,
         username=user.username,
         email=user.email,
-        listening_streak=5,
-        last_listened_at=now - timedelta(days=1)
+        listening_streak=original_streak,
+        last_listened_at=original_last
     )
 
     print("Simulating Sunday with last listened on Saturday")
